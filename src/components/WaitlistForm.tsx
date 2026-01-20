@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface WaitlistFormProps {
   variant?: "hero" | "section";
@@ -16,23 +17,48 @@ const WaitlistForm = ({ variant = "hero" }: WaitlistFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !email.includes("@")) {
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
       toast.error("Please enter a valid email address");
+      return;
+    }
+
+    // Validate email length
+    if (email.length > 255) {
+      toast.error("Email address is too long");
       return;
     }
 
     setIsSubmitting(true);
     
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    toast.success("You're on the list! We'll be in touch soon.");
-    setEmail("");
-    
-    // Reset after 3 seconds
-    setTimeout(() => setIsSubmitted(false), 3000);
+    try {
+      const { error } = await supabase
+        .from("waitlist")
+        .insert({ email: email.toLowerCase().trim() });
+
+      if (error) {
+        if (error.code === "23505") {
+          // Unique constraint violation - email already exists
+          toast.info("You're already on the waitlist! We'll be in touch soon.");
+          setIsSubmitted(true);
+        } else {
+          console.error("Waitlist error:", error);
+          toast.error("Something went wrong. Please try again.");
+        }
+      } else {
+        setIsSubmitted(true);
+        toast.success("You're on the list! We'll be in touch soon.");
+      }
+    } catch (err) {
+      console.error("Waitlist submission error:", err);
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+      setEmail("");
+      // Reset after 3 seconds
+      setTimeout(() => setIsSubmitted(false), 3000);
+    }
   };
 
   if (variant === "hero") {
