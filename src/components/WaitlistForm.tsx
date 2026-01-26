@@ -33,9 +33,11 @@ const WaitlistForm = ({ variant = "hero" }: WaitlistFormProps) => {
     setIsSubmitting(true);
     
     try {
+      const normalizedEmail = email.toLowerCase().trim();
+      
       const { error } = await supabase
         .from("waitlist")
-        .insert({ email: email.toLowerCase().trim() });
+        .insert({ email: normalizedEmail });
 
       if (error) {
         if (error.code === "23505") {
@@ -47,6 +49,28 @@ const WaitlistForm = ({ variant = "hero" }: WaitlistFormProps) => {
           toast.error("Something went wrong. Please try again.");
         }
       } else {
+        // Send welcome email via external edge function
+        try {
+          const emailResponse = await fetch(
+            "https://cnufqucnqdbscnskwgno.supabase.co/functions/v1/send-waitlist-email",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer sb_publishable_9sjXG-KTC1IGVX2qW4cRYw_qYqVZWAP",
+              },
+              body: JSON.stringify({ email: normalizedEmail }),
+            }
+          );
+          
+          if (!emailResponse.ok) {
+            console.error("Email send failed:", await emailResponse.text());
+          }
+        } catch (emailError) {
+          console.error("Email send error:", emailError);
+          // Don't fail the whole signup if email fails
+        }
+        
         setIsSubmitted(true);
         toast.success("You're on the list! We'll be in touch soon.");
       }
